@@ -1,0 +1,573 @@
+<title>Ledgerwatch AML</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  /* Layout: sticky top bar with view tabs. Alerts = queue + detail split; Network = full-width canvas + node panel; SMR = drafting desk with sign-off rail. */
+  --bg:#EEF2F3; --surface:#FFFFFF; --surface-2:#F5F8F9; --line:#D6DFE2; --fg:#14232A; --muted:#58707A;
+  --accent:#0C6575; --accent-ink:#FFFFFF; --accent-soft:#DDEFF2;
+  --crit:#B3261E; --crit-bg:#FBE4E1; --high:#B04E00; --high-bg:#FCE9D8; --med:#7A5F00; --med-bg:#F6EDC9;
+  --low:#4A5E66; --low-bg:#E3EAEC; --ok:#2E6B45; --ok-bg:#DDEFE3;
+  --font-ui:'Schibsted Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1417; --surface:#151D21; --surface-2:#1A252A; --line:#2B3A41; --fg:#E4ECEF; --muted:#8FA4AC;
+  --accent:#56B6C6; --accent-ink:#04252B; --accent-soft:#13343B;
+  --crit:#FF8F86; --crit-bg:#3A1A18; --high:#FFA45C; --high-bg:#3A2412; --med:#E8CB5C; --med-bg:#352E0E;
+  --low:#9DB0B7; --low-bg:#222E33; --ok:#7FD39B; --ok-bg:#16301F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1417; --surface:#151D21; --surface-2:#1A252A; --line:#2B3A41; --fg:#E4ECEF; --muted:#8FA4AC;
+  --accent:#56B6C6; --accent-ink:#04252B; --accent-soft:#13343B;
+  --crit:#FF8F86; --crit-bg:#3A1A18; --high:#FFA45C; --high-bg:#3A2412; --med:#E8CB5C; --med-bg:#352E0E;
+  --low:#9DB0B7; --low-bg:#222E33; --ok:#7FD39B; --ok-bg:#16301F; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--font-ui);-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--surface);z-index:10}
+.wrap{max-width:1360px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{margin:0;font-weight:600;text-wrap:balance;line-height:1.25}
+h2{font-size:18px}h3{font-size:14px}
+.mono,.cite,td.id,pre,.num{font-family:var(--font-mono)}
+.num{font-variant-numeric:tabular-nums}
+a{color:var(--accent)}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 24px;padding-block:10px}
+.brand{font-weight:700;font-size:17px;letter-spacing:-.01em;display:flex;align-items:baseline;gap:8px}
+.brand small{font-weight:500;font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+nav{display:flex;gap:2px;overflow-x:auto;min-width:0;max-width:100%}
+nav a{color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:6px;white-space:nowrap;font-weight:500}
+nav a:hover{background:var(--surface-2);color:var(--fg)}
+nav a.on{background:var(--accent-soft);color:var(--accent)}
+nav .ct{font-family:var(--font-mono);font-size:11px;margin-left:5px;opacity:.85}
+main{padding-block:20px 8px;display:grid;gap:16px}
+.foot{padding-block:16px 28px;color:var(--muted);font-size:12px}
+
+.strip{display:flex;flex-wrap:wrap;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.strip div{flex:1 1 150px;padding:12px 16px;border-right:1px solid var(--line);min-width:0}
+.strip div:last-child{border-right:0}
+.strip b{display:block;font:500 22px/1.2 var(--font-mono);font-variant-numeric:tabular-nums}
+.strip span{font-size:12px;color:var(--muted)}
+
+.split{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;min-width:0}
+.panel>header{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+.pad{padding:14px 16px}
+.scroll{overflow-x:auto}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+select,input[type=text]{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+table{border-collapse:collapse;width:100%}
+th{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+td.id{font-size:12.5px;white-space:nowrap}
+.q tbody tr{cursor:pointer}
+.q tbody tr:hover{background:var(--surface-2)}
+.q tbody tr.sel{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.sub{display:block;color:var(--muted);font-size:12px}
+
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.sev-critical{color:var(--crit);background:var(--crit-bg)}.sev-high{color:var(--high);background:var(--high-bg)}
+.sev-medium{color:var(--med);background:var(--med-bg)}.sev-low{color:var(--low);background:var(--low-bg)}
+.st-new{color:var(--fg);background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line)}
+.st-investigating{color:var(--accent);background:var(--accent-soft)}
+.st-drafted{color:var(--med);background:var(--med-bg)}
+.st-ready{color:var(--ok);background:var(--ok-bg)}
+.st-closed{color:var(--low);background:var(--low-bg)}
+.hit-pep,.hit-sanction{color:var(--crit);background:var(--crit-bg)}.hit-clear{color:var(--ok);background:var(--ok-bg)}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 12px;font-weight:600;cursor:pointer}
+.btn:hover{background:var(--surface-2)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 12px;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:9px 10px;color:var(--muted);font-weight:600;cursor:pointer;white-space:nowrap}
+.tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+dl.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:0}
+dl.kv dt{color:var(--muted)}dl.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.muted{color:var(--muted)}
+.note{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:13px}
+.tot td{font-weight:600;background:var(--surface-2)}
+#detail{scroll-margin-top:70px}
+
+pre{margin:6px 0 0;padding:10px 12px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;font-size:12px;line-height:1.55;overflow-x:auto;white-space:pre}
+.step{padding:12px 0;border-bottom:1px solid var(--line)}.step:last-child{border-bottom:0}
+.step .h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.step .h b{font-weight:600}.step .res{margin-top:6px;font-size:12.5px;color:var(--ok)}
+
+.graphbox{overflow-x:auto}
+svg.graph{display:block;min-width:700px;width:100%;height:auto;color:var(--muted)}
+.graph .edge line{stroke:var(--muted);opacity:.75}.graph .edge.dim{opacity:.15}
+.graph .elab{font:500 11px var(--font-mono);fill:var(--fg);paint-order:stroke;stroke:var(--surface);stroke-width:4px;text-anchor:middle}
+.graph .node{cursor:pointer}.graph .node circle{stroke:var(--muted);stroke-width:1.5;fill:var(--surface)}
+.graph .node.customer circle{fill:var(--accent);stroke:var(--accent)}
+.graph .node.cash circle{fill:var(--low-bg);stroke:var(--low)}
+.graph .node.shell circle,.graph .node.exchange circle{stroke:var(--high);stroke-width:2.5}
+.graph .node.hit circle{stroke:var(--crit);stroke-width:3.5}
+.graph .node.sel circle{stroke:var(--fg);stroke-width:3}
+.graph .node text{font:500 12px var(--font-ui);fill:var(--fg)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted);padding:10px 16px;border-top:1px solid var(--line)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;border:2px solid var(--muted);vertical-align:-1px}
+
+.desk{display:grid;grid-template-columns:230px minmax(0,1fr) 300px;gap:16px;align-items:start}
+.rail button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:10px 14px;cursor:pointer}
+.rail button.on{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.sec{padding:14px 16px;border-bottom:1px solid var(--line)}.sec:last-child{border-bottom:0}
+.sec label{display:flex;justify-content:space-between;gap:8px;font-weight:600;margin-bottom:4px}
+.sec label small{font-weight:400;color:var(--muted)}
+.ed{min-height:3em;line-height:1.7;border-radius:6px;padding:6px 8px;margin:0 -8px;outline:0}
+.ed:focus{background:var(--surface-2);box-shadow:0 0 0 1px var(--line)}
+.cite{display:inline-block;font-size:11px;line-height:1.35;padding:0 6px;margin:0 1px;border-radius:4px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--line);white-space:nowrap;vertical-align:1px}
+.cite-note{color:var(--muted);font-size:12px}
+.chk{display:flex;gap:8px;align-items:flex-start;margin:8px 0}
+.chk input{margin-top:4px}
+.empty{padding:40px 20px;text-align:center;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.tier{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:stretch;margin-bottom:8px}
+.tier>b{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-top:10px}
+.tier .bx{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.tier .bx div{border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--surface-2);font-size:13px}
+.tier .bx div small{display:block;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:6px;font-weight:600;z-index:20}
+
+@media (max-width:1100px){.split{grid-template-columns:minmax(0,1fr)}.desk{grid-template-columns:minmax(0,1fr)}.rail{display:flex;overflow-x:auto}.rail button{width:auto;white-space:nowrap;border-bottom:0}}
+@media (max-width:640px){.hm{display:none}.tier{grid-template-columns:1fr}.tier>b{padding-top:0}.strip div{flex-basis:45%}}
+@media (prefers-reduced-motion:no-preference){.q tbody tr{transition:background .12s}}
+</style>
+<div class="top"><div class="wrap">
+  <div class="brand">Ledgerwatch <small>AML monitoring</small></div>
+  <nav id="nav" aria-label="Views">
+    <a href="#alerts" data-v="alerts">Alerts <span class="ct" id="ctAlerts"></span></a>
+    <a href="#network" data-v="network">Network</a>
+    <a href="#smr" data-v="smr">SMR studio</a>
+    <a href="#rules" data-v="rules">Rules &amp; agents</a>
+    <a href="#audit" data-v="audit">Audit log</a>
+  </nav>
+</div></div>
+<div class="wrap"><main id="app"></main>
+<div class="foot">All customers, accounts, counterparties and transactions on this site are synthetic. Agent steps and narratives are scripted for the prototype; nothing is sent to a regulator.</div></div>
+<div id="toast" class="toast" hidden></div>
+<script>
+(function(){
+'use strict';
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const CC={AU:'Australia',HK:'Hong Kong',NZ:'New Zealand',PH:'Philippines',VN:'Vietnam',TH:'Thailand',ID:'Indonesia',VG:'British Virgin Islands',AE:'United Arab Emirates',MY:'Malaysia',CY:'Cyprus',EE:'Estonia',SC:'Seychelles'};
+const KIND={structuring:'Structuring',passthrough:'Pass-through',circular:'Circular flow',fanout:'Fan-out',dormant:'Dormant revival'};
+const RULEID={structuring:'TM-01',passthrough:'TM-02',circular:'TM-03',fanout:'TM-04',dormant:'TM-05'};
+const STATUS={new:'New',investigating:'Investigating',drafted:'SMR draft',ready:'Ready to submit',closed:'Closed'};
+const SEVL={critical:'Critical',high:'High',medium:'Medium',low:'Low'};
+const AUDf=n=>'AUD '+Math.round(n).toLocaleString('en-AU');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const p2=n=>String(n).padStart(2,'0');
+const ts=s=>{const[d,t]=s.split(' ');const[y,m,da]=d.split('-').map(Number);const[h,mi]=(t||'00:00').split(':').map(Number);return Date.UTC(y,m-1,da,h,mi)};
+const dt=s=>{const[d,t]=s.split(' ');const[,m,da]=d.split('-').map(Number);return da+' '+MON[m-1]+' '+t};
+const dtl=s=>{const[d,t]=s.split(' ');const[y,m,da]=d.split('-').map(Number);return da+' '+MON[m-1]+' '+y+(t?', '+t+' AEDT':'')};
+const BASE=ts('2026-10-31 04:38'),LOAD=Date.now();
+const nowMs=()=>BASE+(Date.now()-LOAD);
+const fmtMs=ms=>{const d=new Date(ms);return d.getUTCDate()+' '+MON[d.getUTCMonth()]+' '+p2(d.getUTCHours())+':'+p2(d.getUTCMinutes())+':'+p2(d.getUTCSeconds())};
+const age=s=>{const h=Math.floor((BASE-ts(s))/36e5);return Math.floor(h/24)+'d '+(h%24)+'h'};
+const T=(id,time,from,to,amt,inst)=>({id,time,from,to,amt,inst});
+
+const A4names=[['Marisol Quintero-Vance','PH'],['Jun Bautista','PH'],['Anh Tuan Pham','VN'],['Kamol Siriwat','TH'],['Dewi Anggraini','ID'],['Ruben Castellan','AU'],['Priya Nair','AU'],['Hone Parata','NZ'],['Tui Wetere','NZ'],['Linh Tran','VN'],['Somchai Preecha','TH'],['Putri Lestari','ID'],['Mateo Ferreira','PH'],['Grace Adeyemi-Cole','AU']];
+const A4amts=[18500,17200,16800,17900,15400,16100,18200,17600,15800,16900,17300,16400,15900,16300];
+const A4times=['2026-10-24 09:10','2026-10-24 10:25','2026-10-24 12:40','2026-10-24 14:05','2026-10-24 16:30','2026-10-25 09:45','2026-10-25 11:10','2026-10-25 13:20','2026-10-25 15:55','2026-10-25 17:05','2026-10-26 09:30','2026-10-26 11:50','2026-10-26 14:15','2026-10-26 16:40'];
+const A4nodes={c:{label:'Tomas Aldridge',type:'customer',cc:'AU'},src:{label:'Cobalt Estate Settlements',type:'company',cc:'AU',screen:{s:'clear'}}};
+const A4tx=[T('TX-884501','2026-10-23 10:30','src','c',240000,'Domestic wire (RTGS)')];
+A4names.forEach((n,i)=>{
+  A4nodes['d'+i]={label:n[0],type:'person',cc:n[1],screen:i===0?{s:'pep',score:0.91,list:'politically exposed persons',detail:'regional councillor with the same name and birth year'}:{s:'clear'}};
+  A4tx.push(T('TX-8845'+p2(i+2),A4times[i],'c','d'+i,A4amts[i],'International wire (outbound)'));
+});
+
+const ALERTS=[
+{id:'AL-24119',kind:'circular',sev:'critical',score:96,status:'drafted',raised:'2026-10-30 18:20',
+ cust:{key:'a',name:'Solstice Maritime Pty Ltd',acct:'****5590',type:'Company',since:'2017-06',occ:'Marine freight broker',ubo:'E. Varga (60%), T. Nakamura (40%)',risk:'High',baseline:'Prior 12 months: domestic freight receipts only, average monthly turnover AUD 310,000. No contracts on file for the payments referencing consulting fees and loan repayment.'},
+ nodes:{a:{label:'Solstice Maritime Pty Ltd',type:'customer',cc:'AU'},b:{label:'Bellwether Consulting Ltd',type:'shell',cc:'VG',screen:{s:'clear'}},c:{label:'Oaken Quay Trading LLC',type:'shell',cc:'AE',screen:{s:'sanction',score:0.82,list:'consolidated sanctions list',detail:'name similarity to a listed trading entity, no matching address'}},d:{label:'Solstice Marine Services Sdn Bhd',type:'company',cc:'MY',screen:{s:'clear'}}},
+ tx:[T('TX-884401','2026-10-20 10:05','a','b',480000,'International wire'),T('TX-884402','2026-10-21 09:40','b','c',468000,'International wire'),T('TX-884403','2026-10-22 11:15','c','d',455000,'International wire'),T('TX-884404','2026-10-23 14:30','d','a',450000,'Wire, loan repayment'),T('TX-884405','2026-10-27 10:20','a','b',210000,'International wire'),T('TX-884406','2026-10-28 09:55','b','c',203500,'International wire'),T('TX-884407','2026-10-29 10:40','c','d',198000,'International wire'),T('TX-884408','2026-10-30 09:15','d','a',195000,'Wire, loan repayment')],
+ media:[{entity:'Oaken Quay Trading LLC',summary:'a corporate registry review lists two nominee directors who sit on more than 40 other thinly capitalised companies.',source:'Corporate registry review (synthetic)',date:'2026-06'}]},
+{id:'AL-24117',kind:'structuring',sev:'high',score:92,status:'new',raised:'2026-10-29 07:42',
+ cust:{key:'c',name:'Kestrel Auto Imports Pty Ltd',acct:'****3321',type:'Company',since:'2019-03',occ:'Used vehicle wholesaler',ubo:'R. Delacroix (80%), M. Lindqvist (20%)',risk:'Medium',baseline:'Prior 90 days: 3 cash deposits, average AUD 2,100.'},
+ nodes:{c:{label:'Kestrel Auto Imports',type:'customer',cc:'AU'},b1:{label:'Cash · Parramatta',type:'cash',cc:'AU'},b2:{label:'Cash · Liverpool',type:'cash',cc:'AU'},b3:{label:'Cash · Blacktown',type:'cash',cc:'AU'},d:{label:'Tang Wei Logistics Ltd',type:'company',cc:'HK',screen:{s:'clear'}}},
+ tx:[T('TX-884201','2026-10-26 09:12','b1','c',9400,'Cash deposit'),T('TX-884202','2026-10-26 11:48','b2','c',9850,'Cash deposit'),T('TX-884203','2026-10-26 15:20','b3','c',8900,'Cash deposit'),T('TX-884204','2026-10-27 09:05','b1','c',9700,'Cash deposit'),T('TX-884205','2026-10-27 12:31','b2','c',9250,'Cash deposit'),T('TX-884206','2026-10-27 16:02','b3','c',9950,'Cash deposit'),T('TX-884207','2026-10-28 08:44','b1','c',8700,'Cash deposit'),T('TX-884208','2026-10-28 14:10','c','d',64000,'International wire (SWIFT)')],media:[]},
+{id:'AL-24120',kind:'fanout',sev:'high',score:88,status:'new',raised:'2026-10-27 09:05',
+ cust:{key:'c',name:'Tomas Aldridge',acct:'****6104',type:'Individual',since:'2011-02',occ:'Retired schoolteacher, pension income',ubo:'Not applicable (individual)',risk:'Low',baseline:'Prior 12 months: average monthly turnover AUD 5,200. No international transfers and no new beneficiaries.'},
+ nodes:A4nodes,tx:A4tx,media:[]},
+{id:'AL-24121',kind:'dormant',sev:'high',score:84,status:'new',raised:'2026-10-29 10:30',dormantSince:'2026-03-27 16:40',
+ cust:{key:'c',name:'Halloran and Beck Pty Ltd',acct:'****0918',type:'Company',since:'2014-09',occ:'Dormant professional services company',ubo:'A. Halloran (50%), S. Beck (50%)',risk:'Medium',baseline:'Account inactive since March 2026. Prior 12 months: payroll and rent only.'},
+ nodes:{c:{label:'Halloran and Beck Pty Ltd',type:'customer',cc:'AU'},s:{label:'Meridian Pacific Capital Ltd',type:'company',cc:'CY',screen:{s:'clear'}},d:{label:'Zephyr Holdings FZE',type:'shell',cc:'AE',screen:{s:'clear'}}},
+ tx:[T('TX-884601','2026-10-28 09:20','s','c',195000,'International wire (inbound)'),T('TX-884602','2026-10-29 10:05','c','d',190000,'International wire (outbound)')],
+ media:[{entity:'Zephyr Holdings FZE',summary:'a 2025 trade finance article names the company among free-zone entities used to receive payments for goods that were never shipped.',source:'Trade finance press (synthetic)',date:'2025-11'}]},
+{id:'AL-24118',kind:'passthrough',sev:'high',score:79,status:'investigating',raised:'2026-10-27 15:30',
+ cust:{key:'c',name:'Nadia Okonkwo-Reyes',acct:'****7782',type:'Individual',since:'2026-08',occ:'Student, part-time hospitality',ubo:'Not applicable (individual)',risk:'Medium',baseline:'Account opened August 2026. Prior activity: wages of about AUD 600 per week.'},
+ ip:'Online banking sessions on 27 Oct came from two VPN exit points in the Netherlands and Singapore, not the customer\'s usual Sydney device.',
+ nodes:{c:{label:'Nadia Okonkwo-Reyes',type:'customer',cc:'AU'},s1:{label:'Liam Hartnett',type:'person',cc:'AU',screen:{s:'clear'}},s2:{label:'Chloe Wen',type:'person',cc:'AU',screen:{s:'clear'}},s3:{label:'Marcus Obi',type:'person',cc:'AU',screen:{s:'clear'}},s4:{label:'Sofia Marchetti',type:'person',cc:'AU',screen:{s:'clear'}},s5:{label:'Daniel Kerr',type:'person',cc:'AU',screen:{s:'clear'}},o1:{label:'Northgate Digital Exchange',type:'exchange',cc:'SC',screen:{s:'clear'}},o2:{label:'Ilya Brandt',type:'person',cc:'EE',screen:{s:'clear'}}},
+ tx:[T('TX-884301','2026-10-27 13:05','s1','c',4800,'Osko transfer'),T('TX-884302','2026-10-27 13:22','s2','c',6200,'Osko transfer'),T('TX-884303','2026-10-27 13:48','s3','c',5500,'Osko transfer'),T('TX-884304','2026-10-27 14:02','s4','c',7100,'Osko transfer'),T('TX-884305','2026-10-27 14:20','s5','c',5900,'Osko transfer'),T('TX-884306','2026-10-27 15:10','c','o1',21000,'Crypto exchange purchase'),T('TX-884307','2026-10-27 16:55','c','o2',7700,'International wire')],media:[]},
+{id:'AL-24123',kind:'passthrough',sev:'medium',score:68,status:'new',raised:'2026-10-28 18:10',
+ cust:{key:'c',name:'Priya Venkataraman',acct:'****4410',type:'Individual',since:'2022-04',occ:'Online craft seller',ubo:'Not applicable (individual)',risk:'Low',baseline:'Typical monthly credits AUD 1,200 to 1,900 from marketplace payouts.'},
+ nodes:{c:{label:'Priya Venkataraman',type:'customer',cc:'AU'},s1:{label:'Marketplace buyer A',type:'person',cc:'AU',screen:{s:'clear'}},s2:{label:'Marketplace buyer B',type:'person',cc:'AU',screen:{s:'clear'}},s3:{label:'Marketplace buyer C',type:'person',cc:'AU',screen:{s:'clear'}},o:{label:'Venkataraman Crafts Pty Ltd',type:'company',cc:'AU',screen:{s:'clear'}}},
+ tx:[T('TX-884701','2026-10-28 10:05','s1','c',1850,'Osko transfer'),T('TX-884702','2026-10-28 10:40','s2','c',2200,'Osko transfer'),T('TX-884703','2026-10-28 11:15','s3','c',1640,'Osko transfer'),T('TX-884704','2026-10-28 13:30','c','o',5420,'Osko transfer')],media:[]},
+{id:'AL-24124',kind:'dormant',sev:'medium',score:57,status:'new',raised:'2026-10-27 12:15',dormantSince:'2025-09-30 11:00',
+ cust:{key:'c',name:'Gordon Fairweather',acct:'****1189',type:'Individual',since:'2003-05',occ:'Retired engineer',ubo:'Not applicable (individual)',risk:'Low',baseline:'Account inactive since September 2025. Previously a low-use savings account.'},
+ nodes:{c:{label:'Gordon Fairweather',type:'customer',cc:'AU'},s:{label:'Harlow Estate Lawyers',type:'company',cc:'AU',screen:{s:'clear'}},d:{label:'G. Fairweather (other bank)',type:'person',cc:'AU',screen:{s:'clear'}}},
+ tx:[T('TX-884801','2026-10-26 10:10','s','c',90000,'Domestic wire (inbound)'),T('TX-884802','2026-10-27 09:30','c','d',40000,'Domestic wire (outbound)')],media:[]},
+{id:'AL-24122',kind:'structuring',sev:'low',score:41,status:'closed',raised:'2026-10-27 08:00',closeReason:'Consistent with customer baseline',
+ cust:{key:'c',name:'Brightwater Cafe Pty Ltd',acct:'****2275',type:'Company',since:'2020-11',occ:'Cafe and catering',ubo:'J. Moretti (100%)',risk:'Low',baseline:'Prior 90 days: weekly cash deposits of AUD 8,000 to 9,500 after weekend trading.'},
+ nodes:{c:{label:'Brightwater Cafe',type:'customer',cc:'AU'},b1:{label:'Cash · Chatswood',type:'cash',cc:'AU'}},
+ tx:[T('TX-884901','2026-10-25 17:05','b1','c',8650,'Cash deposit'),T('TX-884902','2026-10-26 17:20','b1','c',9100,'Cash deposit'),T('TX-884903','2026-10-27 09:15','b1','c',8800,'Cash deposit')],media:[]}
+];
+const byId=id=>ALERTS.find(a=>a.id===id);
+window.__AML={MON,CC,KIND,RULEID,STATUS,SEVL,AUDf,esc,p2,ts,dt,dtl,BASE,nowMs,fmtMs,age,ALERTS,byId};
+})();
+(function(){
+'use strict';
+const X=window.__AML,{CC,RULEID,AUDf,esc,ts,dt,dtl,BASE}=X;
+const sum=l=>l.reduce((s,t)=>s+t.amt,0);
+function stats(a){
+  const k=a.cust.key,tx=[...a.tx].sort((x,y)=>x.time<y.time?-1:1);
+  const inn=tx.filter(t=>t.to===k),out=tx.filter(t=>t.from===k);
+  return {tx,inn,out,inT:sum(inn),outT:sum(out),all:sum(tx)};
+}
+function cite(a,t){
+  const k=a.cust.key,L=x=>esc(a.nodes[x].label);
+  const who=t.from===k?L(t.to):t.to===k?L(t.from):L(t.from)+' → '+L(t.to);
+  return '<span class="cite" contenteditable="false">'+t.id+' · '+who+' · '+dt(t.time)+'</span>';
+}
+function cites(a,l){
+  if(l.length<=4) return l.map(t=>cite(a,t)).join(' ');
+  return cite(a,l[0])+' … '+cite(a,l[l.length-1])+' <span class="cite-note">('+l.length+' transactions)</span>';
+}
+function riskNotes(a){
+  const n=[];
+  Object.values(a.nodes).forEach(v=>{if(v.screen&&v.screen.s!=='clear')n.push(esc(v.label)+' returned a '+v.screen.list+' candidate match (score '+v.screen.score.toFixed(2)+'): '+v.screen.detail+'. The match is unconfirmed pending manual disposition.');});
+  (a.media||[]).forEach(m=>n.push('Adverse media on '+esc(m.entity)+': '+m.summary));
+  return n.join(' ');
+}
+function base(a){
+  const c=a.cust,others=Object.entries(a.nodes).filter(e=>e[0]!==c.key).map(e=>e[1]);
+  const shown=others.slice(0,4).map(v=>esc(v.label)+' ('+v.cc+')').join(', ')+(others.length>4?' and '+(others.length-4)+' others':'');
+  return esc(c.name)+' ('+c.type.toLowerCase()+'), account '+c.acct+', customer since '+c.since+'. '+esc(c.occ)+'. Beneficial owners: '+esc(c.ubo)+'. KYC risk rating: '+c.risk+'. Counterparties in the alert: '+shown+'.';
+}
+function narr(a){
+  const s=stats(a),L=k=>esc(a.nodes[k].label),cc=k=>CC[a.nodes[k].cc]||a.nodes[k].cc;
+  const risk=riskNotes(a),ipn=esc(a.ip||'No device or IP anomalies were recorded for the period.');
+  const hrs=(x,y)=>Math.max(1,Math.round((ts(y)-ts(x))/36e5));
+  const r={who:base(a)},bl=esc(a.cust.baseline);
+  const lastOf=l=>l[l.length-1];
+  if(a.kind==='structuring'){
+    const d=s.inn,mn=Math.min(...d.map(t=>t.amt)),mx=Math.max(...d.map(t=>t.amt));
+    const br=[...new Set(d.map(t=>a.nodes[t.from].label.replace('Cash · ','')))],o=s.out[0],w=hrs(d[0].time,lastOf(d).time);
+    r.what=d.length+' cash deposits totalling '+AUDf(s.inT)+' were made to the account, each between '+AUDf(mn)+' and '+AUDf(mx)+', which is '+AUDf(10000-mx)+' to '+AUDf(10000-mn)+' under the AUD 10,000 threshold transaction reporting level '+cites(a,d)+'.'+(o?' The funds were then sent out by '+o.inst.toLowerCase()+': '+AUDf(s.outT)+' to '+L(o.to)+' ('+cc(o.to)+') '+cites(a,s.out)+'.':'');
+    r.when='First deposit '+dtl(d[0].time)+'; last deposit '+dtl(lastOf(d).time)+', a window of '+w+' hours.'+(o?' Outbound transfer on '+dtl(o.time)+'.':'')+' Baseline: '+bl;
+    r.where='Cash was deposited at '+br.length+' location'+(br.length>1?'s':'')+': '+br.join(', ')+'.'+(o?' Outgoing funds went to '+L(o.to)+' in '+cc(o.to)+'.':'')+' '+ipn;
+    r.why='Rule TM-01 (Structuring) matched on '+d.length+' deposits inside a '+w+' hour window, each placed just under the reporting level.'+(o?' Combined with a prompt offshore transfer of the pooled funds, the activity is consistent with deliberate avoidance of threshold reporting and layering of cash.':' The pattern alone is consistent with avoidance of threshold reporting.')+' '+risk;
+    r.how='Cash was split into amounts under AUD 10,000 and placed across '+br.length+' branch'+(br.length>1?'es':'')+' in rotation ('+br.join(', ')+').'+(o?' The pooled balance was then moved in a single international wire, which leaves the source of the cash unexplained.':'');
+  }else if(a.kind==='passthrough'){
+    const pct=(s.outT/s.inT*100).toFixed(1),w=hrs(s.inn[0].time,lastOf(s.out).time);
+    r.what=s.inn.length+' incoming transfers totalling '+AUDf(s.inT)+' arrived from '+s.inn.length+' different senders '+cites(a,s.inn)+'. '+s.out.length+' outgoing payments totalling '+AUDf(s.outT)+', '+pct+'% of the funds received, followed '+cites(a,s.out)+'.';
+    r.when='Credits arrived between '+dtl(s.inn[0].time)+' and '+dtl(lastOf(s.inn).time)+'. The last payment left '+w+' hours after the first credit, on '+dtl(lastOf(s.out).time)+'. Baseline: '+bl;
+    r.where='Senders are in '+[...new Set(s.inn.map(t=>cc(t.from)))].join(', ')+'. Recipients: '+s.out.map(t=>L(t.to)+' ('+cc(t.to)+')').join(' and ')+'. '+ipn;
+    r.why='Rule TM-02 (Pass-through velocity) matched: the account passed on '+pct+'% of incoming funds within '+w+' hours of the first credit. Rapid pooling and onward transfer of this kind is consistent with a money mule account unless the account holder can explain it. '+risk;
+    r.how='Credits from '+s.inn.length+' senders were pooled, then '+s.out.map(t=>AUDf(t.amt)+' was sent by '+t.inst.toLowerCase()+' to '+L(t.to)).join(', and ')+'. The account kept '+AUDf(s.inT-s.outT)+'.';
+  }else if(a.kind==='circular'){
+    const n=Object.keys(a.nodes).length,c1=s.tx.slice(0,n),cyc=s.out.length;
+    const days=Math.round((ts(c1[n-1].time)-ts(c1[0].time))/864e5);
+    r.what=s.tx.length+' international wires totalling '+AUDf(s.all)+' moved between '+n+' entities in '+cyc+' cycles. In the first cycle '+AUDf(s.out[0].amt)+' left the account '+cites(a,[s.out[0]])+' and '+AUDf(s.inn[0].amt)+' came back from '+L(s.inn[0].from)+' '+cites(a,[s.inn[0]])+'.';
+    r.when='Cycle 1 ran from '+dtl(c1[0].time)+' to '+dtl(c1[n-1].time)+' ('+days+' days). Cycle 2 ran from '+dtl(s.tx[n].time)+' to '+dtl(lastOf(s.tx).time)+'. Baseline: '+bl;
+    r.where='Funds passed through '+[...new Set(s.tx.map(t=>cc(t.to)))].join(', ')+'. Path: '+c1.map(t=>L(t.from)+' ('+cc(t.from)+')').join(' → ')+' → '+L(c1[n-1].to)+'. '+ipn;
+    r.why='Rule TM-03 (Circular flow) matched: funds returned to the account through an affiliate after passing through '+(n-2)+' intermediaries. Each cycle returned '+(s.inn[0].amt/s.out[0].amt*100).toFixed(1)+'% of the amount sent, a small loss that reads like a service charge, and no supporting contracts are on file. '+risk;
+    r.how=c1.map((t,i)=>(i+1)+'. '+L(t.from)+' sent '+AUDf(t.amt)+' to '+L(t.to)+' '+cite(a,t)).join(' ')+' The second cycle repeated the route with smaller amounts.';
+  }else if(a.kind==='fanout'){
+    const i0=s.inn[0],o=s.out,mn=Math.min(...o.map(t=>t.amt)),mx=Math.max(...o.map(t=>t.amt)),pct=(s.outT/i0.amt*100).toFixed(1);
+    const by={};o.forEach(t=>{const k=cc(t.to);by[k]=(by[k]||0)+1});
+    const spread=Object.entries(by).map(e=>e[0]+' ('+e[1]+')').join(', '),w=hrs(o[0].time,lastOf(o).time);
+    r.what='A single '+i0.inst.toLowerCase()+' of '+AUDf(i0.amt)+' from '+L(i0.from)+' '+cite(a,i0)+' was followed by '+o.length+' transfers of '+AUDf(mn)+' to '+AUDf(mx)+' to '+o.length+' different beneficiaries, totalling '+AUDf(s.outT)+' ('+pct+'% of the deposit) '+cites(a,o)+'.';
+    r.when='The deposit arrived on '+dtl(i0.time)+'. Disbursements ran from '+dtl(o[0].time)+' to '+dtl(lastOf(o).time)+', a window of '+w+' hours. Baseline: '+bl;
+    r.where='Beneficiaries are in '+Object.keys(by).length+' countries: '+spread+'. The deposit came from '+L(i0.from)+' ('+cc(i0.from)+'). '+ipn;
+    r.why='Rule TM-04 (Fan-out) matched: '+pct+'% of a single large deposit was scattered across '+o.length+' beneficiaries in '+Object.keys(by).length+' jurisdictions within '+w+' hours. The activity does not fit the customer profile ('+esc(a.cust.occ.toLowerCase())+'). '+risk;
+    r.how='One large credit was split into '+o.length+' near-equal international transfers over '+Math.ceil(w/24)+' days to beneficiaries not seen before in the customer\'s history, spreading the funds across '+Object.keys(by).length+' jurisdictions.';
+  }else{
+    const i0=s.inn[0],o0=s.out[0],dd=Math.floor((ts(i0.time)-ts(a.dormantSince))/864e5),w=hrs(i0.time,o0.time);
+    r.what='After '+dd+' days with no activity (last transaction '+dtl(a.dormantSince)+'), the account received '+AUDf(i0.amt)+' from '+L(i0.from)+' ('+cc(i0.from)+') '+cite(a,i0)+' and sent '+AUDf(o0.amt)+' to '+L(o0.to)+' ('+cc(o0.to)+') '+cite(a,o0)+', which is '+(o0.amt/i0.amt*100).toFixed(1)+'% of the amount received.';
+    r.when='The account was dormant from '+dtl(a.dormantSince)+'. The credit arrived on '+dtl(i0.time)+' and the debit left '+w+' hours later, on '+dtl(o0.time)+'. Baseline: '+bl;
+    r.where='Funds moved '+cc(i0.from)+' → Australia → '+cc(o0.to)+'. '+ipn;
+    r.why='Rule TM-05 (Dormant revival) matched: an account inactive for '+dd+' days received a high-value credit and sent most of it on within '+w+' hours. '+risk;
+    r.how='The dormant account was reactivated by an inbound payment from '+L(i0.from)+' and the balance was forwarded to '+L(o0.to)+' by '+o0.inst.toLowerCase()+', leaving '+AUDf(s.inT-s.outT)+' in the account.';
+  }
+  return r;
+}
+function trace(a){
+  const ref='ACC-'+a.cust.acct.slice(-4),s=stats(a),t0=ts(a.raised),first=s.tx[0].time.slice(0,10);
+  const nodes=Object.keys(a.nodes).length,hits=Object.values(a.nodes).filter(v=>v.screen&&v.screen.s!=='clear').length;
+  const sql={structuring:"SELECT txn_id, booked_at, branch, amount\nFROM ledger\nWHERE account_ref = '"+ref+"'\n  AND instrument = 'CASH_DEPOSIT'\n  AND amount BETWEEN 8500 AND 9950\n  AND booked_at >= now() - interval '48 hours'\nORDER BY booked_at;",
+   passthrough:"SELECT direction, SUM(amount), COUNT(*), MIN(booked_at), MAX(booked_at)\nFROM ledger\nWHERE account_ref = '"+ref+"' AND booked_at >= now() - interval '4 hours'\nGROUP BY direction;",
+   circular:"SELECT txn_id, src_ref, dst_ref, amount, booked_at\nFROM ledger\nWHERE account_ref = '"+ref+"' AND instrument LIKE 'INTL_WIRE%'\n  AND booked_at >= '"+first+"'\nORDER BY booked_at;",
+   fanout:"SELECT txn_id, dst_ref, dst_country, amount, booked_at\nFROM ledger\nWHERE account_ref = '"+ref+"' AND direction = 'OUT'\n  AND booked_at >= '"+first+"'\nORDER BY booked_at;",
+   dormant:"SELECT MAX(booked_at) AS last_activity, COUNT(*)\nFROM ledger\nWHERE account_ref = '"+ref+"' AND booked_at < '"+first+"';"}[a.kind];
+  const cy=a.kind==='circular'?"MATCH p = (a:Account {ref:'"+ref+"'})-[:TRANSFERRED*3..5]->(a)\nRETURN p, reduce(s = 0, r IN relationships(p) | s + r.amount) AS flow\nORDER BY flow DESC LIMIT 10;":"MATCH p = (a:Account {ref:'"+ref+"'})-[:TRANSFERRED*1..3]-(b:Account)\nWHERE all(r IN relationships(p) WHERE r.ts >= datetime('"+first+"'))\nRETURN p LIMIT 50;";
+  const mt=(a.media&&a.media[0])?a.media[0].entity:Object.values(a.nodes).filter(v=>v!==a.nodes[a.cust.key])[0].label;
+  return [
+   {m:0,actor:'Rule engine',tool:'rule-engine',event:'Rule matched',text:'Rule '+RULEID[a.kind]+' ('+X.KIND[a.kind]+') matched on account '+a.cust.acct+'.',res:s.tx.length+' transactions in scope'},
+   {m:1,actor:'Triage agent',tool:'aml-postgres',event:'Queried ledger',text:sql,res:s.tx.length+' rows · total '+AUDf(s.all)+' · scored '+a.score+'/100 ('+X.SEVL[a.sev].toLowerCase()+')'},
+   {m:3,actor:'Investigation agent',tool:'aml-neo4j',event:'Traced network',text:cy,res:nodes+' nodes · '+new Set(a.tx.map(t=>t.from+'>'+t.to)).size+' edges'},
+   {m:4,actor:'Investigation agent',tool:'opensanctions-screening',event:'Screened counterparties',text:'POST /match/default\n{"queries":{"q1":{"schema":"Entity","properties":{"name":["<counterparty>"]}}, ... x'+(nodes-1)+'}}',res:(nodes-1)+' entities screened · '+hits+' candidate'+(hits===1?'':'s')+' above 0.70'},
+   {m:5,actor:'Adverse media agent',tool:'adverse-media-search',event:'Searched adverse media',text:'"'+mt+'" AND (laundering OR fraud OR sanctions)',res:(a.media||[]).length+' relevant article'+((a.media||[]).length===1?'':'s')}
+  ].map(x=>Object.assign(x,{t:t0+x.m*60000}));
+}
+function layout(a){
+  const ids=Object.keys(a.nodes),pos={},CX=430;let H=380;
+  if(a.kind==='circular'){
+    H=400;ids.forEach((id,i)=>{const ang=-Math.PI/2+i*2*Math.PI/ids.length;pos[id]={x:CX+190*Math.cos(ang),y:200+130*Math.sin(ang)}});
+    return {pos,H};
+  }
+  const hub=a.cust.key,toHub=new Set(a.tx.filter(t=>t.to===hub).map(t=>t.from)),fromHub=new Set(a.tx.filter(t=>t.from===hub).map(t=>t.to));
+  const srcs=ids.filter(i=>i!==hub&&toHub.has(i)),dsts=ids.filter(i=>i!==hub&&!toHub.has(i));
+  H=Math.max(360,Math.max(srcs.length,dsts.length)*30+80);
+  const put=(l,x)=>{const gap=Math.min(56,(H-80)/Math.max(1,l.length-1));l.forEach((id,i)=>{pos[id]={x,y:H/2+(i-(l.length-1)/2)*gap}})};
+  put(srcs,250);put(dsts,610);pos[hub]={x:CX,y:H/2};
+  return {pos,H};
+}
+const fmtK=n=>n>=1000?(Math.round(n/100)/10)+'k':String(n);
+const trunc=(s,n)=>s.length>n?s.slice(0,n-1)+'…':s;
+function graphSVG(a,selNode){
+  const {pos,H}=layout(a),ids=Object.keys(a.nodes),CX=430,E={};
+  a.tx.forEach(t=>{const k=t.from+'>'+t.to;(E[k]=E[k]||{f:t.from,t:t.to,amt:0,n:0});E[k].amt+=t.amt;E[k].n++});
+  const edges=Object.values(E),max=Math.max(...edges.map(e=>e.amt)),R=k=>k===a.cust.key?16:8;
+  let s='<svg class="graph" viewBox="0 0 860 '+H+'" role="img" aria-label="Transaction network for '+a.id+'"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>';
+  edges.forEach(e=>{
+    const p=pos[e.f],q=pos[e.t],dx=q.x-p.x,dy=q.y-p.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len;
+    const x1=p.x+ux*(R(e.f)+3),y1=p.y+uy*(R(e.f)+3),x2=q.x-ux*(R(e.t)+8),y2=q.y-uy*(R(e.t)+8);
+    const dim=selNode&&selNode!==e.f&&selNode!==e.t,w=(1+5*Math.sqrt(e.amt/max)).toFixed(1);
+    s+='<g class="edge'+(dim?' dim':'')+'"><line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+'" stroke-width="'+w+'" marker-end="url(#ah)"/><title>'+esc(a.nodes[e.f].label)+' to '+esc(a.nodes[e.t].label)+': '+AUDf(e.amt)+' in '+e.n+' transaction'+(e.n>1?'s':'')+'</title>';
+    if(edges.length<=8)s+='<text class="elab" x="'+((x1+x2)/2).toFixed(1)+'" y="'+(((y1+y2)/2)-5).toFixed(1)+'">'+fmtK(e.amt)+'</text>';
+    s+='</g>';
+  });
+  ids.forEach(id=>{
+    const n=a.nodes[id],p=pos[id],hit=n.screen&&n.screen.s!=='clear',mid=Math.abs(p.x-CX)<30;
+    let tx,ty,an;
+    if(mid){tx=p.x;ty=p.y<H/2?p.y-20:p.y+34;an='middle'}else if(p.x<CX){tx=p.x-14;ty=p.y+4;an='end'}else{tx=p.x+14;ty=p.y+4;an='start'}
+    s+='<g class="node '+n.type+(hit?' hit':'')+(selNode===id?' sel':'')+'" data-act="node" data-id="'+id+'" tabindex="0" role="button" aria-label="'+esc(n.label)+'"><circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+R(id)+'"/><text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="'+an+'">'+esc(trunc(n.label,27))+'</text></g>';
+  });
+  return s+'</svg>';
+}
+Object.assign(X,{stats,narr,trace,graphSVG,cites,cite,riskNotes,sum});
+})();
+(function(){
+'use strict';
+const X=window.__AML,{KIND,STATUS,SEVL,CC,RULEID,AUDf,esc,ts,dt,dtl,age,ALERTS,byId,fmtMs,BASE}=X;
+const S={view:'alerts',sel:'AL-24119',fk:'all',fs:'all',tab:'tx',node:null,closing:false,smrBusy:null,drafts:{},sign:{},audit:[],af:'all',ar:'all',json:false};
+X.S=S;
+const sevPill=s=>'<span class="pill sev-'+s+'"><i></i>'+SEVL[s]+'</span>';
+const stPill=s=>'<span class="pill st-'+s+'">'+STATUS[s]+'</span>';
+const SECS=[['who','Who','Customer, beneficial owners, counterparties'],['what','What','Instrument, amounts, frequency, currency'],['when','When','Dates, velocity window, baseline'],['where','Where','Institutions, locations, jurisdictions'],['why','Why','Basis for suspicion and typology'],['how','How','How the funds were routed']];
+const REASONS=['Consistent with customer baseline','Verified legitimate source of funds','Duplicate of an existing alert','Insufficient indicators after review'];
+X.SECS=SECS;X.REASONS=REASONS;
+
+function visible(){return ALERTS.filter(a=>(S.fk==='all'||a.kind===S.fk)&&(S.fs==='all'||a.status===S.fs)).sort((x,y)=>y.score-x.score)}
+const opts=(o,cur)=>Object.entries(o).map(e=>'<option value="'+e[0]+'"'+(e[0]===cur?' selected':'')+'>'+e[1]+'</option>').join('');
+
+function txTable(a){
+  const s=X.stats(a),L=k=>esc(a.nodes[k].label);
+  return '<div class="scroll"><table><thead><tr><th>ID</th><th>Time</th><th>From</th><th>To</th><th>Instrument</th><th class="r">Amount</th></tr></thead><tbody>'+
+   s.tx.map(t=>'<tr><td class="id">'+t.id+'</td><td class="num" style="white-space:nowrap">'+dt(t.time)+'</td><td>'+L(t.from)+'</td><td>'+L(t.to)+'</td><td>'+esc(t.inst)+'</td><td class="r num">'+AUDf(t.amt).replace('AUD ','')+'</td></tr>').join('')+
+   '<tr class="tot"><td colspan="5">Total, '+s.tx.length+' transactions (AUD)</td><td class="r num">'+AUDf(s.all).replace('AUD ','')+'</td></tr></tbody></table></div>';
+}
+function screenTab(a){
+  const rows=Object.entries(a.nodes).map(e=>{const n=e[1],sc=n.screen;
+    const res=!sc?'<span class="muted">Customer, KYC on file</span>':sc.s==='clear'?'<span class="pill hit-clear">Clear</span>':'<span class="pill hit-'+sc.s+'">'+(sc.s==='pep'?'PEP candidate':'Sanctions candidate')+' · '+sc.score.toFixed(2)+'</span><span class="sub">'+esc(sc.detail)+'</span>';
+    return '<tr><td>'+esc(n.label)+'<span class="sub">'+n.type+'</span></td><td>'+(CC[n.cc]||n.cc)+'</td><td>'+res+'</td></tr>'}).join('');
+  const media=(a.media||[]).length?a.media.map(m=>'<div class="note" style="margin:0 0 8px"><b>'+esc(m.entity)+'</b><br>'+esc(m.summary.charAt(0).toUpperCase()+m.summary.slice(1))+'<span class="sub">'+esc(m.source)+' · '+m.date+'</span></div>').join(''):'<p class="muted" style="margin:0">No relevant adverse media found for the counterparties.</p>';
+  return '<div class="scroll"><table><thead><tr><th>Entity</th><th>Country</th><th>Screening result</th></tr></thead><tbody>'+rows+'</tbody></table></div><div class="pad"><h3 style="margin-bottom:8px">Adverse media</h3>'+media+'</div>';
+}
+function traceTab(a){
+  return '<div class="pad">'+X.trace(a).map(t=>'<div class="step"><div class="h"><b>'+t.actor+'</b><span class="mono muted">'+t.tool+'</span><span class="mono muted">'+fmtMs(t.t)+'</span></div><pre>'+esc(t.text)+'</pre><div class="res">'+esc(t.res)+'</div></div>').join('')+'</div>';
+}
+function actions(a){
+  if(a.status==='closed')return '<span class="muted">Closed: '+esc(a.closeReason||'')+'</span><button class="btn" data-act="reopen" data-id="'+a.id+'">Reopen</button>';
+  if(S.closing)return '<select id="closeReason" aria-label="Reason for closing">'+REASONS.map(r=>'<option>'+r+'</option>').join('')+'</select><button class="btn pri" data-act="close-do" data-id="'+a.id+'">Close alert</button><button class="btn" data-act="close-cancel">Cancel</button>';
+  let h='';
+  if(a.status==='new')h+='<button class="btn pri" data-act="start" data-id="'+a.id+'">Start investigation</button>';
+  if(a.status==='investigating')h+='<button class="btn pri" data-act="draft" data-id="'+a.id+'">Draft SMR</button>';
+  if(a.status==='drafted'||a.status==='ready')h+='<button class="btn pri" data-act="go-smr" data-id="'+a.id+'">Open in SMR studio</button>';
+  h+='<button class="btn" data-act="go-net" data-id="'+a.id+'">View network</button>';
+  if(a.status==='new'||a.status==='investigating')h+='<button class="btn" data-act="close-open">Close as no suspicion</button>';
+  return h;
+}
+function detail(a){
+  const c=a.cust,s=X.stats(a);
+  return '<section class="panel" id="detail"><header><div><h2 class="mono" style="font-size:16px">'+a.id+'</h2><span class="muted">'+KIND[a.kind]+' · rule '+RULEID[a.kind]+' · raised '+dt(a.raised)+', '+age(a.raised)+' ago</span></div><div class="row">'+sevPill(a.sev)+stPill(a.status)+'</div></header>'+
+   '<div class="pad"><dl class="kv"><dt>Customer</dt><dd><b>'+esc(c.name)+'</b> · '+c.type+' · '+c.acct+'</dd><dt>Profile</dt><dd>'+esc(c.occ)+', customer since '+c.since+', KYC risk '+c.risk+'</dd><dt>Ultimate owners</dt><dd>'+esc(c.ubo)+'</dd><dt>Baseline</dt><dd>'+esc(c.baseline)+'</dd><dt>Score</dt><dd class="num">'+a.score+' / 100 · '+s.tx.length+' transactions · '+AUDf(s.all)+'</dd></dl></div>'+
+   '<div class="pad row" style="border-top:1px solid var(--line)">'+actions(a)+'</div>'+
+   '<div class="tabs" role="tablist">'+[['tx','Transactions'],['screen','Screening & media'],['trace','Agent trace']].map(t=>'<button role="tab" class="'+(S.tab===t[0]?'on':'')+'" data-act="tab" data-id="'+t[0]+'">'+t[1]+'</button>').join('')+'</div>'+
+   (S.tab==='tx'?txTable(a):S.tab==='screen'?screenTab(a):traceTab(a))+'</section>';
+}
+function alertsView(){
+  const open=ALERTS.filter(a=>a.status==='new'||a.status==='investigating').length,hi=ALERTS.filter(a=>(a.sev==='high'||a.sev==='critical')&&a.status!=='closed').length;
+  const dr=ALERTS.filter(a=>a.status==='drafted').length,rd=ALERTS.filter(a=>a.status==='ready').length;
+  const list=visible(),a=byId(S.sel)||list[0];
+  return '<div class="strip"><div><b>'+open+'</b><span>Open alerts</span></div><div><b>'+hi+'</b><span>High or critical</span></div><div><b>'+dr+'</b><span>SMR drafts awaiting sign-off</span></div><div><b>'+rd+'</b><span>Ready to submit</span></div></div>'+
+  '<div class="split"><section class="panel"><header><h2>Alert queue</h2><div class="filters"><select id="fk" aria-label="Typology">'+opts(Object.assign({all:'All typologies'},KIND),S.fk)+'</select><select id="fs" aria-label="Status">'+opts(Object.assign({all:'All statuses'},STATUS),S.fs)+'</select></div></header>'+
+  '<div class="scroll"><table class="q"><thead><tr><th>Alert</th><th>Typology</th><th class="hm">Customer</th><th class="r hm">Flow (AUD)</th><th class="r">Score</th><th>Status</th></tr></thead><tbody>'+
+  (list.length?list.map(x=>'<tr data-act="sel" data-id="'+x.id+'" class="'+(x.id===S.sel?'sel':'')+'"><td class="id">'+x.id+'<span class="sub">'+age(x.raised)+' old</span></td><td>'+KIND[x.kind]+'<span class="sub">'+sevPill(x.sev)+'</span></td><td class="hm">'+esc(x.cust.name)+'<span class="sub">'+x.cust.acct+'</span></td><td class="r num hm">'+X.stats(x).all.toLocaleString('en-AU')+'</td><td class="r num">'+x.score+'</td><td>'+stPill(x.status)+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">No alerts match these filters.</td></tr>')+
+  '</tbody></table></div></section>'+detail(a)+'</div>';
+}
+function netView(){
+  const a=byId(S.sel),n=S.node&&a.nodes[S.node],s=X.stats(a);
+  let side='<p class="muted" style="margin:0">Select a node to see its transactions and screening result. Line width shows the amount moved.</p>';
+  if(n){
+    const t=a.tx.filter(x=>x.from===S.node||x.to===S.node),ino=X.sum(t.filter(x=>x.to===S.node)),outo=X.sum(t.filter(x=>x.from===S.node)),sc=n.screen;
+    side='<h3>'+esc(n.label)+'</h3><dl class="kv" style="margin:8px 0 12px"><dt>Type</dt><dd>'+n.type+'</dd><dt>Country</dt><dd>'+(CC[n.cc]||n.cc)+'</dd><dt>Received</dt><dd class="num">'+AUDf(ino)+'</dd><dt>Sent</dt><dd class="num">'+AUDf(outo)+'</dd><dt>Screening</dt><dd>'+(!sc?'Customer, KYC on file':sc.s==='clear'?'<span class="pill hit-clear">Clear</span>':'<span class="pill hit-'+sc.s+'">'+(sc.s==='pep'?'PEP candidate':'Sanctions candidate')+' · '+sc.score.toFixed(2)+'</span> '+esc(sc.detail))+'</dd></dl><div class="scroll"><table><tbody>'+t.map(x=>'<tr><td class="id">'+x.id+'</td><td class="num">'+AUDf(x.amt).replace('AUD ','')+'</td></tr>').join('')+'</tbody></table></div>';
+  }
+  return '<section class="panel"><header><div class="row"><h2>Network</h2><select id="netSel" aria-label="Alert">'+ALERTS.map(x=>'<option value="'+x.id+'"'+(x.id===S.sel?' selected':'')+'>'+x.id+' · '+KIND[x.kind]+'</option>').join('')+'</select></div><div class="row">'+sevPill(a.sev)+stPill(a.status)+'<button class="btn" data-act="open-alert" data-id="'+a.id+'">Open alert</button></div></header>'+
+  '<div class="split" style="gap:0;grid-template-columns:minmax(0,2.2fr) minmax(240px,1fr)"><div><div class="graphbox">'+X.graphSVG(a,S.node)+'</div><div class="legend"><span><i style="background:var(--accent);border-color:var(--accent)"></i>Customer account</span><span><i style="background:var(--low-bg)"></i>Cash source</span><span><i style="border-color:var(--high)"></i>Shell or exchange</span><span><i style="border-color:var(--crit)"></i>Screening candidate</span></div></div><aside class="pad" style="border-left:1px solid var(--line)">'+side+'</aside></div></section>';
+}
+function smrView(){
+  const el=ALERTS.filter(a=>a.status!=='closed'),a=byId(S.sel).status==='closed'?el[0]:byId(S.sel);
+  S.sel=a.id;
+  const rail='<div class="panel rail"><header><h3>Alerts</h3></header>'+el.map(x=>'<button data-act="smr-sel" data-id="'+x.id+'" class="'+(x.id===a.id?'on':'')+'"><span class="mono">'+x.id+'</span> '+stPill(x.status)+'<span class="sub">'+KIND[x.kind]+'</span></button>').join('')+'</div>';
+  const d=S.drafts[a.id];let mid;
+  if(S.smrBusy===a.id)mid='<div class="panel empty">Drafting narrative from ledger records…</div>';
+  else if(!d)mid='<div class="panel empty"><p style="margin:0 0 12px">No SMR draft exists for <b>'+a.id+'</b> ('+KIND[a.kind]+').</p><button class="btn pri" data-act="draft" data-id="'+a.id+'">Draft SMR narrative</button></div>';
+  else{
+    const locked=a.status==='ready';
+    mid='<section class="panel"><header><div><h2>Suspicious Matter Report, draft</h2><span class="mono muted">SMR-DRAFT-'+a.id.slice(3)+' · '+esc(a.cust.name)+'</span></div><div class="row">'+stPill(a.status)+'<span class="muted" id="citeCt"></span></div></header>'+
+     SECS.map(s=>'<div class="sec"><label>'+s[1]+' <small>'+s[2]+(d.edited[s[0]]?' · edited by officer':'')+'</small></label><div class="ed" data-sec="'+s[0]+'" contenteditable="'+(locked?'false':'true')+'" role="textbox" aria-label="'+s[1]+'">'+d.sections[s[0]]+'</div></div>').join('')+'</section>';
+  }
+  let rrail='<section class="panel"><header><h3>Officer sign-off</h3></header><div class="pad">';
+  if(!d)rrail+='<p class="muted" style="margin:0">Draft the narrative first. The agent writes the draft and cites ledger records. An officer reviews and signs off.</p>';
+  else{
+    const g=S.sign[a.id]||(S.sign[a.id]={name:'',c:[false,false,false]});
+    if(a.status==='ready')rrail+='<div class="note" style="border-color:var(--ok)"><b>Signed off</b> by '+esc(g.name)+' at '+g.when+'.<br>Ready to submit. This prototype does not transmit reports to AUSTRAC.</div><div class="row" style="margin-top:12px"><button class="btn" data-act="unsign" data-id="'+a.id+'">Reopen for editing</button></div>';
+    else rrail+=['Every claim has a ledger citation I have checked','Customer identity and owners are verified','I have edited the narrative where needed'].map((t,i)=>'<label class="chk"><input type="checkbox" data-chk="'+i+'"'+(g.c[i]?' checked':'')+'><span>'+t+'</span></label>').join('')+'<label for="officer" class="muted" style="display:block;margin:12px 0 4px">Officer name</label><input type="text" id="officer" style="width:100%" value="'+esc(g.name)+'" autocomplete="off"><div class="row" style="margin-top:12px"><button class="btn pri" id="signBtn" data-act="sign" data-id="'+a.id+'" disabled>Sign off</button></div><p class="muted" style="font-size:12px;margin:12px 0 0">AI drafts the narrative. A human officer decides. Reports are due to AUSTRAC within 3 business days of forming the suspicion, or 24 hours where terrorism financing is suspected.</p>';
+  }
+  return '<div class="desk">'+rail+mid+rrail+'</div></section></div>';
+}
+function rulesView(){
+  const R=[['structuring','Cash deposits aggregated just under the AUD 10,000 threshold transaction reporting level.',[['Deposit band','AUD 8,500 to 9,950'],['Window','48 hours'],['Minimum','3 deposits']]],
+   ['passthrough','An account receives several transfers and passes on almost all of the money within hours.',[['Outflow share','over 95%'],['Window','1 to 4 hours'],['Minimum','3 incoming senders']]],
+   ['circular','Funds leave the account, pass through shell entities and return to the account or an affiliate.',[['Path length','3 to 5 hops'],['Detection','Neo4j cycle match'],['Return share','over 80%']]],
+   ['fanout','One large deposit is scattered into many small transfers to unrelated people across jurisdictions.',[['Transfers','8 or more'],['Share dispersed','over 90%'],['Window','72 hours'],['Jurisdictions','3 or more']]],
+   ['dormant','A dormant account suddenly sends a high-value wire.',[['Dormancy','180 days or more'],['Outbound wire','AUD 25,000 or more'],['Trigger','within 7 days of first credit']]]];
+  const tier=(l,items)=>'<div class="tier"><b>'+l+'</b><div class="bx">'+items.map(i=>'<div>'+i[0]+'<small>'+i[1]+'</small></div>').join('')+'</div></div>';
+  return '<div class="note">This is a front-end prototype. Rules run on synthetic data and agent steps are scripted. The structure below follows the platform design: rule-based ingestion feeds an agent dispatcher, and agents reach data through MCP servers.</div>'+
+  '<div class="cards">'+R.map(r=>'<section class="panel"><header><h3>'+RULEID[r[0]]+' · '+KIND[r[0]]+'</h3><span class="pill st-investigating">'+ALERTS.filter(a=>a.kind===r[0]).length+' alerts</span></header><div class="pad"><p style="margin:0 0 10px">'+r[1]+'</p><dl class="kv mono" style="font-size:12.5px">'+r[2].map(p=>'<dt>'+p[0]+'</dt><dd>'+p[1]+'</dd>').join('')+'</dl></div></section>').join('')+'</div>'+
+  '<section class="panel"><header><h2>Agents and data access</h2></header><div class="pad">'+tier('Frontend',[['Next.js 15','Alerts queue, graph visualiser, SMR studio']])+tier('Orchestration',[['Rule-based ingestion','Five typology rules'],['Agent dispatcher','REST and SSE to the frontend']])+tier('Agents',[['Triage','Haiku · alert scoring'],['Investigation','Sonnet · transaction review, Cypher'],['Adverse media','Haiku · entity extraction'],['SMR drafter','Sonnet · narrative with citations']])+tier('MCP tools',[['aml-postgres','Transactions and KYC'],['aml-neo4j','Graph topology'],['opensanctions-screening','Sanctions and PEP lists'],['adverse-media-search','Web search']])+'</div></section>';
+}
+function auditView(){
+  let rows=S.audit.filter(e=>(S.af==='all'||e.alert===S.af)&&(S.ar==='all'||e.actor===S.ar)).sort((x,y)=>y.t-x.t);
+  const actors=[...new Set(S.audit.map(e=>e.actor))];
+  const json=JSON.stringify(rows.map(e=>({timestamp:fmtMs(e.t),actor:e.actor,tool:e.tool,event:e.event,alert:e.alert,detail:e.detail})),null,2);
+  S.jsonText=json;
+  return '<section class="panel"><header><div><h2>Audit log</h2><span class="muted">Agent actions, tool calls and officer decisions. Account numbers are masked.</span></div><div class="filters"><select id="af" aria-label="Alert"><option value="all">All alerts</option>'+ALERTS.map(a=>'<option value="'+a.id+'"'+(a.id===S.af?' selected':'')+'>'+a.id+'</option>').join('')+'</select><select id="ar" aria-label="Actor"><option value="all">All actors</option>'+actors.map(x=>'<option'+(x===S.ar?' selected':'')+'>'+x+'</option>').join('')+'</select><button class="btn" data-act="json">'+(S.json?'Show table':'Show JSON')+'</button><button class="btn" data-act="copyjson">Copy JSON</button></div></header>'+
+  (S.json?'<div class="pad"><pre style="max-height:560px">'+esc(json)+'</pre></div>':'<div class="scroll"><table><thead><tr><th>Time</th><th>Actor</th><th>Event</th><th>Alert</th><th>Detail</th></tr></thead><tbody>'+rows.slice(0,80).map(e=>'<tr><td class="num" style="white-space:nowrap">'+fmtMs(e.t)+'</td><td>'+e.actor+(e.tool?'<span class="sub mono">'+e.tool+'</span>':'')+'</td><td>'+e.event+'</td><td class="id">'+e.alert+'</td><td>'+esc(e.detail)+'</td></tr>').join('')+'</tbody></table></div>')+'</section>';
+}
+X.views={alerts:alertsView,network:netView,smr:smrView,rules:rulesView,audit:auditView};
+})();
+(function(){
+'use strict';
+const X=window.__AML,S=X.S,{ALERTS,byId,esc,dt,nowMs,fmtMs,ts}=X;
+const $=(q,r)=>(r||document).querySelector(q);
+const VIEWS=['alerts','network','smr','rules','audit'];
+
+function log(actor,event,alert,detail,tool){S.audit.push({t:nowMs(),actor,event,alert,detail:detail||'',tool:tool||''})}
+function makeDraft(a){
+  const n=X.narr(a);return {sections:n,edited:{},at:nowMs()};
+}
+function countCites(d){return Object.values(d.sections).reduce((s,h)=>s+(h.match(/class="cite"/g)||[]).length,0)}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>{t.hidden=true},2200)}
+
+/* seed audit log and the pre-drafted SMR */
+ALERTS.forEach(a=>{X.trace(a).forEach(t=>S.audit.push({t:t.t,actor:t.actor,event:t.event,alert:a.id,detail:t.res,tool:t.tool}))});
+S.drafts['AL-24119']=makeDraft(ALERTS.find(a=>a.id==='AL-24119'));
+S.drafts['AL-24119'].at=ts('2026-10-30 19:05');
+S.audit.push({t:ts('2026-10-30 19:05'),actor:'SMR drafter',event:'SMR draft generated',alert:'AL-24119',detail:countCites(S.drafts['AL-24119'])+' ledger citations',tool:''});
+const c=ALERTS.find(a=>a.id==='AL-24122');
+S.audit.push({t:ts('2026-10-27 11:40'),actor:'Compliance officer',event:'Alert closed',alert:'AL-24122',detail:c.closeReason,tool:''});
+
+function updSign(){
+  const b=$('#signBtn');if(!b)return;const g=S.sign[S.sel];
+  b.disabled=!(g.c.every(Boolean)&&g.name.trim().length>=3);
+}
+function updCites(){const el=$('#citeCt');const d=S.drafts[S.sel];if(el&&d){el.textContent=countCites(d)+' citations'}}
+function render(keepScroll){
+  if(!VIEWS.includes(S.view))S.view='alerts';
+  document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.v===S.view));
+  $('#ctAlerts').textContent=ALERTS.filter(a=>a.status==='new'||a.status==='investigating').length;
+  const y=window.scrollY;
+  $('#app').innerHTML=X.views[S.view]();
+  if(S.view==='smr'){updSign();updCites()}
+  if(keepScroll)window.scrollTo(0,y);
+}
+function route(){
+  const h=location.hash.replace('#','');
+  S.view=VIEWS.includes(h)?h:'alerts';S.node=null;S.closing=false;render();
+}
+function go(v){if(location.hash==='#'+v)route();else location.hash=v}
+function setStatus(a,st,actor,event,detail){a.status=st;log(actor,event,a.id,detail)}
+function draft(id){
+  const a=byId(id);
+  S.sel=id;S.view='smr';
+  if(location.hash!=='#smr'){history.replaceState(null,'','#smr')}
+  S.smrBusy=id;render();
+  setTimeout(()=>{
+    S.drafts[id]=makeDraft(a);S.smrBusy=null;
+    if(a.status==='new'||a.status==='investigating')setStatus(a,'drafted','SMR drafter','SMR draft generated',countCites(S.drafts[id])+' ledger citations');
+    render();window.scrollTo(0,0);
+  },900);
+}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;
+  const act=el.dataset.act,id=el.dataset.id,a=id&&byId(id);
+  if(act==='sel'){S.sel=id;S.tab='tx';S.closing=false;render(true);
+    if(window.innerWidth<1100){const d=$('#detail');if(d)d.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})}}
+  else if(act==='tab'){S.tab=id;render(true)}
+  else if(act==='start'){setStatus(a,'investigating','Compliance officer','Investigation started','Alert assigned to the officer');render(true)}
+  else if(act==='draft'){draft(id)}
+  else if(act==='close-open'){S.closing=true;render(true)}
+  else if(act==='close-cancel'){S.closing=false;render(true)}
+  else if(act==='close-do'){const r=$('#closeReason').value;a.closeReason=r;S.closing=false;setStatus(a,'closed','Compliance officer','Alert closed',r);render(true);toast('Alert closed')}
+  else if(act==='reopen'){a.closeReason='';setStatus(a,'investigating','Compliance officer','Alert reopened','');render(true)}
+  else if(act==='go-smr'){S.sel=id;go('smr')}
+  else if(act==='go-net'){S.sel=id;S.node=null;go('network')}
+  else if(act==='open-alert'){S.sel=id;go('alerts')}
+  else if(act==='smr-sel'){S.sel=id;render()}
+  else if(act==='node'){S.node=S.node===id?null:id;render(true)}
+  else if(act==='sign'){const g=S.sign[id];g.when=fmtMs(nowMs());a.status='ready';log('Compliance officer','SMR signed off',id,'Signed by '+g.name+' after review of '+countCites(S.drafts[id])+' citations');render(true);toast('Signed off, ready to submit')}
+  else if(act==='unsign'){a.status='drafted';const g=S.sign[id];g.c=[false,false,false];log('Compliance officer','SMR reopened for editing',id,'');render(true)}
+  else if(act==='json'){S.json=!S.json;render(true)}
+  else if(act==='copyjson'){
+    const txt=S.jsonText||'';
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>toast('Copied JSON')).catch(()=>{S.json=true;render(true);toast('Select the JSON to copy it')})}
+    else{S.json=true;render(true);toast('Select the JSON to copy it')}
+  }
+});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'&&e.key!==' ')return;
+  const n=e.target.closest&&e.target.closest('g[data-act="node"]');
+  if(n){e.preventDefault();S.node=S.node===n.dataset.id?null:n.dataset.id;render(true)}
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.id==='fk'){S.fk=t.value;render(true)}
+  else if(t.id==='fs'){S.fs=t.value;render(true)}
+  else if(t.id==='netSel'){S.sel=t.value;S.node=null;render(true)}
+  else if(t.id==='af'){S.af=t.value;render(true)}
+  else if(t.id==='ar'){S.ar=t.value;render(true)}
+  else if(t.dataset&&t.dataset.chk!==undefined){S.sign[S.sel].c[+t.dataset.chk]=t.checked;updSign()}
+});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.id==='officer'){S.sign[S.sel].name=t.value;updSign()}
+  const sec=t.closest&&t.closest('[data-sec]');
+  if(sec){const d=S.drafts[S.sel];d.sections[sec.dataset.sec]=sec.innerHTML;d.edited[sec.dataset.sec]=true;updCites()}
+});
+window.addEventListener('hashchange',route);
+route();
+})();
+</script>
